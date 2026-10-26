@@ -1,0 +1,323 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b63">
+  <title>Golden Pen - گولدن بين</title>
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #f1f4f8;
+      color: #172b43;
+    }
+    header {
+      background: #173b63;
+      color: white;
+      text-align: center;
+      padding: 20px 10px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+    }
+    h1 { margin: 0 0 8px; font-size: 25px; }
+    header p { margin: 0; }
+    .panel {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 8px #0000000d;
+    }
+    h2 { font-size: 19px; margin-top: 0; }
+    input, button {
+      width: 100%;
+      padding: 13px;
+      margin: 6px 0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    input { border: 1px solid #cbd5e1; background: white; }
+    button {
+      border: 0;
+      background: #173b63;
+      color: white;
+      font-weight: bold;
+    }
+    .green { background: #198754; }
+    .red { background: #b42318; }
+    .item {
+      border: 1px solid #dce3eb;
+      padding: 12px;
+      border-radius: 9px;
+      margin-top: 10px;
+      overflow-wrap: anywhere;
+    }
+    .price { color: #198754; font-weight: bold; }
+    #reader { width: 100%; margin-top: 10px; }
+    #message { white-space: pre-wrap; font-size: 14px; }
+    .small { color: #58677a; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Golden Pen</h1>
+    <p>گولدن بين - إدارة المواد والأسعار</p>
+  </header>
+
+  <section class="panel">
+    <h2>إضافة مادة جديدة</h2>
+    <input id="barcode" placeholder="رقم الباركود">
+    <button type="button" id="scanBtn" class="green">مسح الباركود بالكاميرا</button>
+    <div id="reader"></div>
+    <input id="name" placeholder="اسم المادة">
+    <input id="price" type="number" min="0" step="0.01"
+      placeholder="السعر بالدولار">
+    <button type="button" id="saveBtn">حفظ المادة</button>
+    <p id="message"></p>
+    <p class="small">تحتاج الكاميرا إلى إذن منك. يمكن إدخال الباركود يدوياً أيضاً.</p>
+  </section>
+
+  <section class="panel">
+    <h2>البحث عن مادة</h2>
+    <input id="search" placeholder="اكتب الباركود أو اسم المادة">
+    <div id="results"></div>
+  </section>
+
+  <section class="panel">
+    <h2>النسخة الاحتياطية</h2>
+    <button type="button" id="exportBtn" class="green">تصدير المواد</button>
+    <button type="button" id="importBtn">استيراد نسخة احتياطية</button>
+    <input type="file" id="backupFile" accept=".json,application/json"
+      hidden>
+    <p class="small">احتفظ بنسخة احتياطية حتى لا تفقد المواد إذا حذفت بيانات المتصفح.</p>
+  </section>
+
+<script>
+"use strict";
+
+const KEY = "golden_pen_items_v1";
+let items = [];
+
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || "[]");
+  if (Array.isArray(saved)) items = saved;
+} catch (e) {}
+
+const $ = id => document.getElementById(id);
+const barcodeInput = $("barcode");
+const nameInput = $("name");
+const priceInput = $("price");
+const message = $("message");
+
+function saveStorage() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(items));
+    return true;
+  } catch (e) {
+    message.textContent = "تعذر الحفظ. تأكد من مساحة التخزين.";
+    return false;
+  }
+}
+
+function render() {
+  const q = $("search").value.trim().toLowerCase();
+  const found = items.filter(item =>
+    String(item.barcode).toLowerCase().includes(q) ||
+    String(item.name).toLowerCase().includes(q)
+  );
+
+  $("results").innerHTML = "";
+
+  if (!found.length) {
+    $("results").textContent = q ? "ما لكيت مادة مطابقة." :
+      "عدد المواد المسجلة: " + items.length;
+    return;
+  }
+
+  found.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "item";
+
+    const title = document.createElement("strong");
+    title.textContent = item.name;
+
+    const code = document.createElement("p");
+    code.textContent = "الباركود: " + item.barcode;
+
+    const price = document.createElement("p");
+    price.className = "price";
+    price.textContent = "السعر: $" + Number(item.price).toFixed(2);
+
+    const edit = document.createElement("button");
+    edit.textContent = "تعديل";
+    edit.onclick = () => {
+      barcodeInput.value = item.barcode;
+      nameInput.value = item.name;
+      priceInput.value = item.price;
+      window.scrollTo({top: 0, behavior: "smooth"});
+    };
+
+    const del = document.createElement("button");
+    del.className = "red";
+    del.textContent = "حذف المادة";
+    del.onclick = () => {
+      if (!confirm("متأكد تريد حذف هذه المادة؟")) return;
+      items = items.filter(x => x.id !== item.id);
+      if (saveStorage()) render();
+    };
+
+    card.append(title, code, price, edit, del);
+    $("results").appendChild(card);
+  });
+}
+
+$("saveBtn").onclick = () => {
+  const barcode = barcodeInput.value.trim();
+  const name = nameInput.value.trim();
+  const priceText = priceInput.value.trim();
+  const price = Number(priceText);
+
+  if (!barcode || !name || priceText === "" ||
+      !Number.isFinite(price) || price < 0) {
+    message.textContent = "أدخل الباركود واسم المادة والسعر الصحيح.";
+    return;
+  }
+
+  const existing = items.find(x => x.barcode === barcode);
+  if (existing) {
+    existing.name = name;
+    existing.price = price;
+  } else {
+    items.push({
+      id: String(Date.now()) + Math.random().toString(16).slice(2),
+      barcode, name, price
+    });
+  }
+
+  if (!saveStorage()) return;
+  message.textContent = "تم حفظ المادة بنجاح.";
+  barcodeInput.value = "";
+  nameInput.value = "";
+  priceInput.value = "";
+  render();
+};
+
+$("search").addEventListener("input", render);
+
+$("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(items, null, 2)], {
+    type: "application/json"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "golden-pen-backup.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+$("importBtn").onclick = () => $("backupFile").click();
+
+$("backupFile").onchange = async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data) || !data.every(x =>
+      x && typeof x.barcode === "string" &&
+      typeof x.name === "string" &&
+      Number.isFinite(Number(x.price))
+    )) throw new Error();
+
+    if (!confirm("استبدال المواد الحالية بالنسخة المستوردة؟")) return;
+    items = data.map(x => ({
+      id: x.id || String(Date.now()) + Math.random(),
+      barcode: x.barcode,
+      name: x.name,
+      price: Number(x.price)
+    }));
+    if (saveStorage()) {
+      message.textContent = "تم استيراد النسخة الاحتياطية.";
+      render();
+    }
+  } catch (e) {
+    message.textContent = "الملف غير صالح أو غير مدعوم.";
+  }
+  event.target.value = "";
+};
+
+let stream = null;
+
+$("scanBtn").onclick = async () => {
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+    $("reader").innerHTML = "";
+    $("scanBtn").textContent = "مسح الباركود بالكاميرا";
+    return;
+  }
+
+  if (!("BarcodeDetector" in window)) {
+    message.textContent =
+      "المتصفح لا يدعم قارئ الباركود المدمج. سنضيف مكتبة كاميرا تعمل بدون إنترنت في خطوة لاحقة.";
+    return;
+  }
+
+  try {
+    const detector = new BarcodeDetector();
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {facingMode: "environment"}
+    });
+
+    const video = document.createElement("video");
+    video.setAttribute("playsinline", "");
+    video.autoplay = true;
+    video.srcObject = stream;
+    $("reader").replaceChildren(video);
+    $("scanBtn").textContent = "إيقاف الكاميرا";
+    await video.play();
+
+    const scan = async () => {
+      if (!stream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length) {
+          barcodeInput.value = codes[0].rawValue;
+          stream.getTracks().forEach(track => track.stop());
+          stream = null;
+          $("reader").innerHTML = "";
+          $("scanBtn").textContent = "مسح الباركود بالكاميرا";
+          message.textContent = "تمت قراءة الباركود. أكمل اسم المادة والسعر.";
+          return;
+        }
+      } catch (e) {}
+      if (stream) requestAnimationFrame(scan);
+    };
+    requestAnimationFrame(scan);
+  } catch (e) {
+    message.textContent = "تعذر تشغيل الكاميرا. اسمح للمتصفح باستخدامها.";
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+};
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./service-worker.js")
+      .catch(() => {
+        message.textContent =
+          "البرنامج مفتوح، لكن لم يتم تفعيل وضع عدم الاتصال بعد.";
+      });
+  });
+}
+
+render();
+</script>
+</body>
+</html>
